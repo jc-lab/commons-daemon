@@ -39,6 +39,62 @@ java {
     withSourcesJar()
 }
 
+task buildNatives {
+    dependsOn build
+}
+
+def generateBuildNativeTask(String arch) {
+    return tasks.create(
+            name: "buildNative${arch}",
+            dependsOn: 'buildNatives'
+    ) {
+        String cmakeExecutable = System.getenv().getOrDefault("CMAKE_EXECUTABLE", "cmake");
+        File nativeBuildDir = file("${buildDir}/native-build" + arch)
+        File nativeOutDir = file("${buildDir}/native/" + arch)
+        String nativeSrcDir = project.file("src/native")
+
+        println("cmakeExecutable = ${cmakeExecutable}")
+        println("path = ${nativeSrcDir}")
+
+        nativeBuildDir.mkdirs();
+        nativeOutDir.mkdirs();
+
+        project.exec {
+            workingDir(nativeBuildDir)
+            commandLine(
+                    cmakeExecutable,
+                    "${nativeSrcDir}",
+                    "-DCMAKE_INSTALL_PREFIX=" + nativeOutDir.absolutePath
+            )
+            standardOutput = System.out
+            errorOutput = System.err
+        }
+        project.exec {
+            workingDir(nativeBuildDir)
+            commandLine(
+                    cmakeExecutable,
+                    "--build", ".", "--config", "Release"
+            )
+            standardOutput = System.out
+            errorOutput = System.err
+        }
+        project.exec {
+            workingDir(nativeBuildDir)
+            commandLine(
+                    cmakeExecutable,
+                    "--install", "."
+            )
+            standardOutput = System.out
+            errorOutput = System.err
+        }
+    }
+}
+
+def availableArchs = ["Win32", "x64"]
+availableArchs.each({
+    v -> generateBuildNativeTask v
+})
+
 publishing {
     publications {
         maven(MavenPublication) {
